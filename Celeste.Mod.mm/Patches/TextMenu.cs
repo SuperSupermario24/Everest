@@ -90,6 +90,16 @@ namespace Celeste {
 #pragma warning restore CS0626 // extern method with no attribute
 
         public override void Update() {
+            // TextMenu overrides this in-game so we need to override it back
+            // TODO: handle this better
+            bool disabled = MInput.Disabled;
+            if (Current is TextMenuExt.TextEntry textEntry && textEntry.EnteringText && textEntry.TextConsumedButton) {
+                MInput.Disabled = true;
+            }
+            if (Input.MenuDown.Pressed) {
+                Console.WriteLine("TextMenu update called");
+            }
+
             orig_Update();
 
             if (Focused && Items.Any(item => item.Hoverable)) {
@@ -113,6 +123,7 @@ namespace Celeste {
                     Current.OnEnter?.Invoke();
                 }
             }
+            MInput.Disabled = disabled;
         }
 
         [MonoModReplace]

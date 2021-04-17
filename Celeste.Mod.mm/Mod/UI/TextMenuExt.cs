@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using Celeste.Mod;
+using Microsoft.Xna.Framework;
 using Monocle;
 using System;
 using System.Collections.Generic;
@@ -1332,6 +1333,159 @@ namespace Celeste {
 
             #endregion
 
+        }
+
+        /// <summary>
+        /// <see cref="TextMenu.Item"/> that allows for text entry when selected.
+        /// </summary>
+        public class TextEntry : TextMenu.Item {
+            public string Label;
+            public string Text;
+            public Action<string> OnTextChanged;
+
+            public bool EnteringText;
+            public bool TextConsumedButton;
+
+            private Color textBoxColor;
+
+            public TextEntry(string label, string text = "") {
+                Label = label;
+                Text = text;
+                Selectable = true;
+                textBoxColor = Color.DarkSlateGray;
+                textBoxColor.A = 80;
+                // make sure the game is never stuck with input disabled
+                OnLeave = () => {
+                    switchState(false);
+                };
+            }
+
+            public override float Height() {
+                return ActiveFont.LineHeight;
+            }
+
+            public override void ConfirmPressed() {
+                Audio.Play(SFX.ui_main_button_select);
+                switchState();
+            }
+
+            public override void Update() {
+                MInput.Disabled = TextConsumedButton;
+                Engine.Scene.OnEndOfFrame += () => TextConsumedButton = false;
+            }
+
+            public override void Render(Vector2 position, bool highlighted) {
+                renderLabel(position, highlighted);
+                // draw text box (largely copied from OuiMapSearch)
+                float alpha = Container.Alpha;
+                Vector2 boxPosition = position + new Vector2(ActiveFont.Measure(Label).X + 24f, 0f);
+                Draw.Rect(boxPosition + new Vector2(-8f, 32f), 416, (int) (ActiveFont.HeightOf("l" + Text) + 8) * -1, textBoxColor);
+                ActiveFont.DrawOutline(Text + (EnteringText ? "_" : ""), boxPosition, new Vector2(0f, 0.5f), Vector2.One * 0.75f, Color.White * alpha, 2f, Color.Black * (alpha * alpha * alpha));
+            }
+
+            private void renderLabel(Vector2 position, bool highlighted) {
+                // mostly copied from TextMenu.Button
+                float alpha = Container.Alpha;
+                Color textColor = (Disabled ? Color.DarkSlateGray : ((highlighted ? Container.HighlightColor : Color.White) * alpha));
+                Color strokeColor = Color.Black * (alpha * alpha * alpha);
+                bool twoColumn = Container.InnerContent == TextMenu.InnerContentMode.TwoColumn;
+                Vector2 position2 = position + (twoColumn ? Vector2.Zero : new Vector2(Container.Width * 0.5f, 0f));
+                Vector2 justify = twoColumn ? new Vector2(0f, 0.5f) : new Vector2(0.5f, 0.5f);
+                ActiveFont.DrawOutline(Label, position2, justify, Vector2.One, textColor, 2f, strokeColor);
+            }
+
+            private void switchState(bool? state = null) {
+                // make compiler shut up without a bunch of casts
+                bool stateBool = state ?? !EnteringText;
+
+                if (stateBool && !EnteringText) {
+                    TextInput.OnInput += OnTextInput;
+                    //Engine.Scene.OnEndOfFrame += () => {
+                        EnteringText = true;
+                    //};
+                } else if (!stateBool && EnteringText) {
+                    TextInput.OnInput -= OnTextInput;
+                    //Engine.Scene.OnEndOfFrame += () => {
+                        EnteringText = false;
+                    //};
+                }
+            }
+
+            public void OnTextInput(char c) {
+                // again mostly copied from OuiMapSearch
+                if (!EnteringText)
+                    return;
+
+                if (c == (char) 13) {
+                    // Enter
+                    Container.Scene.OnEndOfFrame += () => {
+                        Audio.Play(SFX.ui_main_button_select);
+                        switchState();
+                    };
+                    goto ValidButton;
+
+                } else if (c == (char) 8) {
+                    // Backspace - trim.
+                    if (Text.Length > 0) {
+                        Text = Text.Substring(0, Text.Length - 1);
+                        Audio.Play(SFX.ui_main_rename_entry_backspace);
+                        OnTextChanged?.Invoke(Text);
+                        goto ValidButton;
+                    } else {
+                        if (Input.MenuCancel.Pressed) {
+                            Audio.Play(SFX.ui_main_button_back);
+                            switchState();
+                            goto ValidButton;
+                        }
+                        return;
+                    }
+
+                } else if (c == (char) 127) {
+                    // Delete - clear.
+                    if (Text.Length > 0) {
+                        //clearSearch();
+                        Text = "";
+                        Audio.Play(SFX.ui_main_rename_entry_backspace);
+                        OnTextChanged?.Invoke(Text);
+                        goto ValidButton;
+                    }
+                    return;
+
+                } else if (c == ' ') {
+                    // Space - append.
+                    if (Text.Length > 0) {
+                        if (ActiveFont.Measure(Text + c + "_").X < 542)
+                            Text += c;
+                    }
+                    Audio.Play(SFX.ui_main_rename_entry_space);
+                    OnTextChanged?.Invoke(Text);
+                    goto ValidButton;
+
+                } else if (!char.IsControl(c)) {
+                    // Any other character - append.
+                    if (ActiveFont.FontSize.Characters.ContainsKey(c)) {
+                        Audio.Play(SFX.ui_main_rename_entry_char);
+                        if (ActiveFont.Measure(Text + c + "_").X < 542)
+                            Text += c;
+                        OnTextChanged?.Invoke(Text);
+                        goto ValidButton;
+                    } else {
+                        goto InvalidButton;
+                    }
+                }
+
+                return;
+
+                ValidButton:
+                TextConsumedButton = true;
+                //MInput.Disabled = true;
+                MInput.UpdateNull();
+                return;
+
+                InvalidButton:
+                Audio.Play(SFX.ui_main_button_invalid);
+                return;
+            }
         }
     }
 }

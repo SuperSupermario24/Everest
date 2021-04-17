@@ -40,6 +40,13 @@ namespace Celeste.Mod.UI {
                 ImageScale = 0.5f
             });
 
+            menu.Add(new TextMenuExt.TextEntry(Dialog.Clean("maplist_search")) {
+                OnTextChanged = (text) => {
+                    Console.WriteLine(text);
+                    Console.WriteLine($"MInput.Disabled: {MInput.Disabled}");
+                }
+            });
+
             if (!inGame) {
                 List<EverestModuleMetadata> missingDependencies = new List<EverestModuleMetadata>();
 
@@ -128,6 +135,10 @@ namespace Celeste.Mod.UI {
 
             if (menu.Height > menu.ScrollableMinSize) {
                 menu.Position.Y = menu.ScrollTargetY;
+            }
+
+            if (menu.Current is TextMenuExt.TextEntry) {
+                menu.MoveSelection(1);
             }
 
             return menu;
